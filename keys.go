@@ -2,6 +2,7 @@ package main
 
 import ("code.google.com/p/x-go-binding/xgb")
 // Because xgb is shitty and doesn't define key constants
+// keycodes for now, will change to keysyms eventually
 const (
 	K_a = 38
 	K_b = 56
