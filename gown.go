@@ -7,7 +7,8 @@ import (
 	"reflect"
 )
 
-// some variables
+// list of clients (updated with update_clients)
+// and the currently focused client
 var clients []xgb.Id
 var focus = 0
 
@@ -48,12 +49,24 @@ func dmenu_run(conn *xgb.Conn) {
 }
 
 func kill_client(conn *xgb.Conn) {
-	conn.DestroyWindow(clients[focus])
+	if len(clients) > 0 {
+		conn.DestroyWindow(clients[focus])
+	}
 }
 
 func update_clients(conn *xgb.Conn) {
 	s := conn.DefaultScreen()
 	querytree, _ := conn.QueryTree(s.Root)
 	clients = querytree.Children
-	fmt.Println(clients)
+	fmt.Printf("%v clients", len(clients))
+}
+
+func next_client(conn *xgb.Conn) {
+	if focus == len(clients) - 1 {
+		focus = 0
+	} else {
+		focus += 1
+	}
+
+	conn.SetInputFocus(xgb.InputFocusPointerRoot, clients[focus], xgb.TimeCurrentTime)
 }

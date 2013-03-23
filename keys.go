@@ -48,4 +48,5 @@ type Shortcut struct {
 // it's like magic!!
 var Shortcuts = []Shortcut{
 	{Mod4, K_x, dmenu_run},
-	{Mod4, K_k, kill_client}}
+	{Mod4, K_k, kill_client},
+	{Mod4, K_n, next_client}}
