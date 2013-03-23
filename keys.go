@@ -33,19 +33,18 @@ const (
 
 // Shorter names for the modkeys
 const Mod4    = xgb.KeyButMaskMod4
-const Alt     = xgb KeyButMaskMod3
+const Alt     = xgb.KeyButMaskMod3
 const Shift   = xgb.KeyButMaskShift
 const Control = xgb.KeyButMaskControl
 
 type Shortcut struct {
-	Mod int
-	Key int
-	Function string
+	Mod uint16
+	Key byte
+	Function func(conn *xgb.Conn)
 }
 
 // Shortcuts with function names!
 // it's like magic!!
-
-const Shortcuts []Shortcut{
-	{Mod4, K_x, dmenu_run}
-}
+var Shortcuts = []Shortcut{
+	{Mod4, K_x, dmenu_run},
+	{Mod4, K_k, kill_client}}
