@@ -9,8 +9,8 @@ import (
 
 // list of clients (updated with update_clients)
 // and the currently focused client
-var clients []xgb.Id
-var focus = 0
+var clients  []xgb.Id
+var focus int
 
 func main(){
 	conn, err := xgb.Dial(":1")
@@ -24,6 +24,8 @@ func main(){
 	for _, v := range(Shortcuts) {
 		conn.GrabKey(true,s.Root,v.Mod,v.Key,xgb.GrabModeAsync,xgb.GrabModeAsync)
 	}
+
+	conn.ChangeWindowAttributes(s.Root,xgb.CWEventMask,[]uint32{xgb.EventMaskSubstructureRedirect})
 	
 	for{
 		event, _ := conn.WaitForEvent()
@@ -35,11 +37,12 @@ func main(){
 					fmt.Println("shortcut hit:",v)
 				}
 			}
+		case xgb.MapRequestEvent:
+			clients = append(clients, ev.Window)
+			conn.MapWindow(ev.Window)
 		default:
 			fmt.Println(reflect.TypeOf(ev))
 		}
-		update_clients(conn)
-		
 	}
 }
 
@@ -54,19 +57,13 @@ func kill_client(conn *xgb.Conn) {
 	}
 }
 
-func update_clients(conn *xgb.Conn) {
-	s := conn.DefaultScreen()
-	querytree, _ := conn.QueryTree(s.Root)
-	clients = querytree.Children
-	fmt.Printf("%v clients", len(clients))
-}
-
 func next_client(conn *xgb.Conn) {
-	if focus == len(clients) - 1 {
-		focus = 0
-	} else {
+	if focus < len(clients) {
 		focus += 1
+	} else {
+		focus = 0
 	}
-
-	conn.SetInputFocus(xgb.InputFocusPointerRoot, clients[focus], xgb.TimeCurrentTime)
+	if len(clients) > 0 && clients[focus] != 0 {
+		conn.SetInputFocus(xgb.InputFocusPointerRoot, clients[focus], xgb.TimeCurrentTime)
+	}
 }
