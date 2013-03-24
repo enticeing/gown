@@ -20,6 +20,13 @@ var tiles struct {
 }
 var height, width uint32
 
+type frame struct {
+	Mode int
+	X, Y, W, H int
+	Window xgb.Id
+	A, B *frame
+}
+
 func main(){
 	conn, err := xgb.Dial(":1")
 	if err != nil {
@@ -57,15 +64,9 @@ func main(){
 			} else {
 				clients.Rest = append(clients.Rest, ev.Window)
 			}
-
-			if tiles.Head == 0 {
-				tiles.Head = ev.Window
-			} else {
-				tiles.Rest = append(tiles.Rest, ev.Window)
-			}
 			
 			conn.MapWindow(ev.Window)
-			tile(conn,0)
+			//tile(conn,0)
 		default:
 			fmt.Println(reflect.TypeOf(ev))
 		}
@@ -81,8 +82,14 @@ func kill_client(conn *xgb.Conn) {
 	if clients.Focus != 0 {
 		conn.DestroyWindow(clients.Focus)
 	}
-	clients.Focus = clients.Rest[0]
-	clients.Rest = clients.Rest[1:]
+	if len(clients.Rest) > 1 {
+		clients.Focus = clients.Rest[0]
+		clients.Rest = clients.Rest[1:]
+//		tile(conn, 0)
+	} else {
+		clients.Focus = clients.Rest[0]
+//		tile(conn, 0)
+	}
 }
 
 func next_client(conn *xgb.Conn) {
@@ -93,34 +100,28 @@ func next_client(conn *xgb.Conn) {
 	conn.SetInputFocus(xgb.InputFocusPointerRoot, clients.Focus, xgb.TimeCurrentTime)
 }
 
-func tile(conn *xgb.Conn, mode int) {
-	fmt.Println("tiling mode", mode)
-
-	thrd := uint32(0.7 * float64(width))
-
-	if len(tiles.Rest) != 0 {
-		move_resize_window(conn, tiles.Head, []uint32{0, 0, thrd,height})
-	} else {
-		move_resize_window(conn, tiles.Head, []uint32{0, 0, width, height})
-	}
-	fmt.Println(len(tiles.Rest))
-	if len(tiles.Rest) <= 5 && len(tiles.Rest) != 0{
-		for i, v := range(tiles.Rest) {
-			i32 := uint32(i+1)
-			move_resize_window(conn, v, []uint32{thrd,height/i32,width,(height/i32+1)})
-		}
-	} else if len(tiles.Rest) != 0 {
-
-		for i, v := range(tiles.Rest[:4]) {
-			i32 := uint32(i+1)
-			move_resize_window(conn, v, []uint32{thrd,height/i32,width,(height/i32+1)})
-		}
-		
-	}
-}
-
-
 func move_resize_window (conn *xgb.Conn, window xgb.Id, coords []uint32) {
 	// ConfigWindowX = 1, Y = 2, W = 4, H = 8
 	conn.ConfigureWindow(window,1|2|4|8,coords)
+}
+
+func new_frame(window xgb.Id, x, y, w, h, mode int) frame {
+	newframe := frame{mode, x, y, w, h, window, nil, nil}
+	return newframe
+}
+
+func (f *frame) split_horizontal(percent int) {
+	yfloat := float64(f.Y)
+	hfloat := float64(f.H)
+
+	// the split is percent % down from Y
+	split := int(yfloat + (((yfloat+hfloat)-yfloat)*(float64(100)/float64(percent))))
+
+	// set mode to h-split
+	f.Mode = 2
+
+	// the current frame's window is moved to the left child
+	// and then set to 0
+	f.A = &frame{0, f.X, f.Y, f.W, split, f.Window, nil, nil}
+	f.B = &frame{0, f.X, split, f.W, f.H, 0, nil, nil}
 }
