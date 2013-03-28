@@ -7,24 +7,14 @@ import (
 	"reflect"
 )
 
-// list of clients (updated with update_clients)
-// and the currently focused client
-var clients struct {
-	Focus xgb.Id
-	Rest []xgb.Id
-}
+type Desktop struct {
+	W, H int
 
-var tiles struct {
-	Head xgb.Id
-	Rest []xgb.Id
-}
-var height, width uint32
-
-type frame struct {
+	// To Do
 	Mode int
-	X, Y, W, H int
-	Window xgb.Id
-	A, B *frame
+
+	Head, Focus xgb.Id
+	Clients []xgb.Id
 }
 
 func main(){
@@ -34,8 +24,13 @@ func main(){
 	}
 	defer conn.Close()
 
-	height = uint32(conn.Setup.Roots[0].HeightInPixels)
-	width = uint32(conn.Setup.Roots[0].WidthInPixels)
+	// height := int(conn.Setup.Roots[0].HeightInPixels)
+	// width := int(conn.Setup.Roots[0].WidthInPixels)
+
+	width := 1920
+	height := 1080
+	
+	desktop := Desktop{width, height, 0, 0, 0, nil}
 	
 	s := conn.DefaultScreen()
 	
@@ -56,17 +51,20 @@ func main(){
 				}
 			}
 		case xgb.MapRequestEvent:
-			// if it's the first client, give it focus
-			// we'll do something similar with tiling
-			// just after this
-			if clients.Focus == 0 {
-				clients.Focus = ev.Window
+			if desktop.Head == 0 {
+				desktop.Head = ev.Window
+			} else if desktop.Clients == nil {
+				desktop.Clients = []xgb.Id{ev.Window}
 			} else {
-				clients.Rest = append(clients.Rest, ev.Window)
+				desktop.Clients = append(desktop.Clients, ev.Window)
 			}
-			
+
+			desktop.Focus = ev.Window
+
+			desktop.Tile(conn)
 			conn.MapWindow(ev.Window)
-			//tile(conn,0)
+		case xgb.DestroyNotifyEvent:
+			fmt.Println("notify to destroy", ev)
 		default:
 			fmt.Println(reflect.TypeOf(ev))
 		}
@@ -78,50 +76,39 @@ func dmenu_run(conn *xgb.Conn) {
 	dmenu.Start()
 }
 
+// STUB
 func kill_client(conn *xgb.Conn) {
-	if clients.Focus != 0 {
-		conn.DestroyWindow(clients.Focus)
+	conn.DestroyWindow(0)
+}
+
+func (d *Desktop) Tile(conn *xgb.Conn) {
+	if d.Head == 0 {
+		if d.Clients == nil {
+			return
+		}
+
+		d.Head = d.Clients[0]
+		d.Clients = d.Clients[1:]
+
 	}
-	if len(clients.Rest) > 1 {
-		clients.Focus = clients.Rest[0]
-		clients.Rest = clients.Rest[1:]
-//		tile(conn, 0)
-	} else {
-		clients.Focus = clients.Rest[0]
-//		tile(conn, 0)
+
+	wsplit := uint32(.8 * float64(d.W))
+
+
+	// The second argument to ConfigureWindow is the valuemask
+	// where we decide which values to change
+	// 1|2|3|4 says that we want to change the window's X, Y, W and H
+	 
+	conn.ConfigureWindow(d.Head, 1|2|3|4, []uint32{0, 0, wsplit, uint32(d.H)})
+
+	if d.Clients != nil {
+		n := 1
+		for y := 0; y <= d.H; y += int(float64(d.H) / float64(len(d.Clients))) {
+			conn.ConfigureWindow(d.Clients[n-1], 1|2|3|4, []uint32{wsplit, uint32(y), uint32(d.W) - wsplit, uint32(float64(d.H)/float64(len(d.Clients)))})
+			n += 1
+			if n > len(d.Clients) {
+				return
+			}
+		}
 	}
-}
-
-func next_client(conn *xgb.Conn) {
-	clients.Rest = append(clients.Rest, clients.Focus)
-	clients.Focus = clients.Rest[0]
-	clients.Rest = clients.Rest[1:]
-	
-	conn.SetInputFocus(xgb.InputFocusPointerRoot, clients.Focus, xgb.TimeCurrentTime)
-}
-
-func move_resize_window (conn *xgb.Conn, window xgb.Id, coords []uint32) {
-	// ConfigWindowX = 1, Y = 2, W = 4, H = 8
-	conn.ConfigureWindow(window,1|2|4|8,coords)
-}
-
-func new_frame(window xgb.Id, x, y, w, h, mode int) frame {
-	newframe := frame{mode, x, y, w, h, window, nil, nil}
-	return newframe
-}
-
-func (f *frame) split_horizontal(percent int) {
-	yfloat := float64(f.Y)
-	hfloat := float64(f.H)
-
-	// the split is percent % down from Y
-	split := int(yfloat + (((yfloat+hfloat)-yfloat)*(float64(100)/float64(percent))))
-
-	// set mode to h-split
-	f.Mode = 2
-
-	// the current frame's window is moved to the left child
-	// and then set to 0
-	f.A = &frame{0, f.X, f.Y, f.W, split, f.Window, nil, nil}
-	f.B = &frame{0, f.X, split, f.W, f.H, 0, nil, nil}
 }
